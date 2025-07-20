@@ -16,16 +16,16 @@
         /* Canvasの親要素の縦横比を維持しつつ、レスポンシブにするためのスタイル */
         .canvas-container {
             width: 100%;
-            /* デフォルトはA4縦の縦横比 */
-            padding-top: calc(841.89 / 595.28 * 100%); /* A4縦の縦横比 */
+            /* デフォルトはA4縦の縦横比 (高さ / 幅 * 100%) */
+            padding-top: calc(841.89 / 595.28 * 100%);
             position: relative;
             background-color: #f0f0f0; /* プレビューエリアの背景色 */
             border-radius: 0.75rem; /* rounded-xl */
             overflow: hidden; /* 角丸に対応 */
         }
         .canvas-container.landscape {
-            /* 横向きの縦横比 */
-            padding-top: calc(595.28 / 841.89 * 100%); /* A4横の縦横比 */
+            /* 横向きの縦横比 (高さ / 幅 * 100%) */
+            padding-top: calc(595.28 / 841.89 * 100%);
         }
         .canvas-container.a3-portrait {
             /* A3縦の縦横比 */
@@ -136,7 +136,7 @@
         const ctx = popCanvas.getContext('2d');
         const canvasContainer = document.getElementById('canvasContainer');
 
-        // 用紙サイズの設定 (pt単位, PDF出力用)
+        // 用紙サイズの設定 (pt単位, PDF出力用) - 標準A4/A3サイズ
         const PAPER_SIZES = {
             A4_PORTRAIT: { width: 595.28, height: 841.89 }, // 210mm x 297mm @ 72dpi
             A3_PORTRAIT: { width: 841.89, height: 1190.55 }, // 297mm x 420mm @ 72dpi
@@ -161,23 +161,20 @@
             // キャンバスのサイズ設定 (プレビュー用)
             // 実際のPDFサイズ比率を維持しつつ、コンテナに合わせてスケーリング
             let selectedSizeKey;
-            let orientationClass;
 
             if (currentDisplayFormat === 'oneCharPortrait') {
                 selectedSizeKey = `${currentPaperSize}_PORTRAIT`;
-                orientationClass = ''; // 縦向きなのでlandscapeクラスは不要
             } else { // twoCharLandscape
                 selectedSizeKey = `${currentPaperSize}_LANDSCAPE`;
-                orientationClass = 'landscape';
             }
             const selectedSize = PAPER_SIZES[selectedSizeKey];
             const aspectRatio = selectedSize.height / selectedSize.width;
 
             // コンテナのpadding-topを更新して縦横比を調整
             canvasContainer.style.paddingTop = `${aspectRatio * 100}%`;
-            canvasContainer.classList.remove('landscape', 'a3-portrait', 'a3-landscape'); // 全てのクラスをリセット
             
-            // 選択された用紙サイズと向きに応じたクラスを追加
+            // CSSクラスをリセットし、選択された用紙サイズと向きに応じたクラスを追加
+            canvasContainer.classList.remove('landscape', 'a3-portrait', 'a3-landscape');
             if (currentPaperSize === 'A3' && currentDisplayFormat === 'oneCharPortrait') {
                 canvasContainer.classList.add('a3-portrait');
             } else if (currentPaperSize === 'A3' && currentDisplayFormat === 'twoCharLandscape') {
@@ -261,7 +258,7 @@
 
             if (currentDisplayFormat === 'oneCharPortrait') {
                 selectedSizeObj = PAPER_SIZES[`${currentPaperSize}_PORTRAIT`];
-                orientation = 'portrait';
+                orientation = 'portrait'; // jsPDFのorientationは 'portrait' または 'landscape'
                 filenamePrefix = '一文字ポップ';
                 charStep = 1;
             } else { // twoCharLandscape
