@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一文字ポップ作成ツール</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF CDN for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* Interフォントを適用 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Canvasの親要素の縦横比を維持しつつ、レスポンシブにするためのスタイル */
+        .canvas-container {
+            width: 100%;
+            /* デフォルトはA4縦の縦横比 */
+            padding-top: calc(841.89 / 595.28 * 100%); /* A4縦の縦横比 */
+            position: relative;
+            background-color: #f0f0f0; /* プレビューエリアの背景色 */
+            border-radius: 0.75rem; /* rounded-xl */
+            overflow: hidden; /* 角丸に対応 */
+        }
+        .canvas-container.landscape {
+            /* 横向きの縦横比 */
+            padding-top: calc(595.28 / 841.89 * 100%); /* A4横の縦横比 */
+        }
+        .canvas-container.a3-portrait {
+            /* A3縦の縦横比 */
+            padding-top: calc(1190.55 / 841.89 * 100%);
+        }
+        .canvas-container.a3-landscape {
+            /* A3横の縦横比 */
+            padding-top: calc(841.89 / 1190.55 * 100%);
+        }
+        .canvas-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block; /* 余分なスペースをなくす */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl flex flex-col lg:flex-row gap-8">
+        <!-- コントロールパネル -->
+        <div class="flex-1 space-y-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center lg:text-left">一文字ポップ作成ツール</h1>
+
+            <!-- テキスト入力 -->
+            <div>
+                <label for="popText" class="block text-sm font-medium text-gray-700 mb-2">ポップのテキスト (100文字まで)</label>
+                <textarea id="popText" maxlength="100" rows="4"
+                          class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-base resize-none"
+                          placeholder="例: 激辛！"></textarea>
+                <p id="charCount" class="text-sm text-gray-500 mt-1 text-right">0 / 100 文字</p>
+            </div>
+
+            <!-- 背景色選択 -->
+            <div>
+                <label for="bgColor" class="block text-sm font-medium text-gray-700 mb-2">背景色</label>
+                <input type="color" id="bgColor" value="#ef4444"
+                       class="mt-1 block w-full h-12 rounded-lg border border-gray-300 cursor-pointer">
+            </div>
+
+            <!-- 文字色選択 -->
+            <div>
+                <label for="textColor" class="block text-sm font-medium text-gray-700 mb-2">文字色</label>
+                <input type="color" id="textColor" value="#ffffff"
+                       class="mt-1 block w-full h-12 rounded-lg border border-gray-300 cursor-pointer">
+            </div>
+
+            <!-- 表示形式選択 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">表示形式</label>
+                <div class="mt-1 flex gap-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="displayFormat" value="oneCharPortrait" checked
+                               class="form-radio h-5 w-5 text-red-600 focus:ring-red-500 rounded-full">
+                        <span class="ml-2 text-gray-700">1文字/ページ (縦向き)</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="displayFormat" value="twoCharLandscape"
+                               class="form-radio h-5 w-5 text-red-600 focus:ring-red-500 rounded-full">
+                        <span class="ml-2 text-gray-700">2文字/ページ (横向き)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 用紙サイズ選択 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">用紙サイズ</label>
+                <div class="mt-1 flex gap-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="paperSize" value="A4" checked
+                               class="form-radio h-5 w-5 text-red-600 focus:ring-red-500 rounded-full">
+                        <span class="ml-2 text-gray-700">A4</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="paperSize" value="A3"
+                               class="form-radio h-5 w-5 text-red-600 focus:ring-red-500 rounded-full">
+                        <span class="ml-2 text-gray-700">A3</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- PDFダウンロードボタン -->
+            <button id="downloadPdfBtn"
+                    class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                PDFダウンロード
+            </button>
+        </div>
+
+        <!-- プレビューエリア -->
+        <div class="flex-1 flex items-center justify-center p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <div id="canvasContainer" class="canvas-container shadow-inner">
+                <canvas id="popCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const popText = document.getElementById('popText');
+        const charCount = document.getElementById('charCount');
+        const bgColor = document.getElementById('bgColor');
+        const textColor = document.getElementById('textColor');
+        const displayFormatRadios = document.querySelectorAll('input[name="displayFormat"]');
+        const paperSizeRadios = document.querySelectorAll('input[name="paperSize"]');
+        const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+        const popCanvas = document.getElementById('popCanvas');
+        const ctx = popCanvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvasContainer');
+
+        // 用紙サイズの設定 (pt単位, PDF出力用)
+        const PAPER_SIZES = {
+            A4_PORTRAIT: { width: 595.28, height: 841.89 }, // 210mm x 297mm @ 72dpi
+            A3_PORTRAIT: { width: 841.89, height: 1190.55 }, // 297mm x 420mm @ 72dpi
+            A4_LANDSCAPE: { width: 841.89, height: 595.28 }, // 297mm x 210mm @ 72dpi
+            A3_LANDSCAPE: { width: 1190.55, height: 841.89 }  // 420mm x 297mm @ 72dpi
+        };
+
+        let currentDisplayFormat = 'oneCharPortrait'; // 現在選択されている表示形式
+        let currentPaperSize = 'A4'; // 現在選択されている用紙サイズ
+
+        /**
+         * プレビューキャンバスを更新する関数
+         */
+        function updatePreview() {
+            const text = popText.value;
+            const bg = bgColor.value;
+            const textCol = textColor.value;
+
+            // 文字数カウンターの更新
+            charCount.textContent = `${text.length} / 100 文字`;
+
+            // キャンバスのサイズ設定 (プレビュー用)
+            // 実際のPDFサイズ比率を維持しつつ、コンテナに合わせてスケーリング
+            let selectedSizeKey;
+            let orientationClass;
+
+            if (currentDisplayFormat === 'oneCharPortrait') {
+                selectedSizeKey = `${currentPaperSize}_PORTRAIT`;
+                orientationClass = ''; // 縦向きなのでlandscapeクラスは不要
+            } else { // twoCharLandscape
+                selectedSizeKey = `${currentPaperSize}_LANDSCAPE`;
+                orientationClass = 'landscape';
+            }
+            const selectedSize = PAPER_SIZES[selectedSizeKey];
+            const aspectRatio = selectedSize.height / selectedSize.width;
+
+            // コンテナのpadding-topを更新して縦横比を調整
+            canvasContainer.style.paddingTop = `${aspectRatio * 100}%`;
+            canvasContainer.classList.remove('landscape', 'a3-portrait', 'a3-landscape'); // 全てのクラスをリセット
+            
+            // 選択された用紙サイズと向きに応じたクラスを追加
+            if (currentPaperSize === 'A3' && currentDisplayFormat === 'oneCharPortrait') {
+                canvasContainer.classList.add('a3-portrait');
+            } else if (currentPaperSize === 'A3' && currentDisplayFormat === 'twoCharLandscape') {
+                canvasContainer.classList.add('a3-landscape');
+            } else if (currentDisplayFormat === 'twoCharLandscape') { // A4 landscape
+                canvasContainer.classList.add('landscape');
+            }
+            // A4 portraitの場合は何も追加しない (デフォルトスタイル)
+
+
+            // キャンバスの描画サイズは、コンテナの幅と高さに合わせる
+            // ただし、描画解像度を上げるために、CSSサイズとは別に内部解像度を設定
+            const displayWidth = canvasContainer.offsetWidth;
+            const displayHeight = canvasContainer.offsetHeight;
+
+            // 高解像度描画のために内部解像度を上げる (例: 2倍)
+            const dpiScale = 2;
+            popCanvas.width = displayWidth * dpiScale;
+            popCanvas.height = displayHeight * dpiScale;
+            ctx.scale(dpiScale, dpiScale); // 描画コンテキストもスケール
+
+            // 背景の描画
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, displayWidth, displayHeight);
+
+            // テキストの描画
+            ctx.fillStyle = textCol;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            if (text.length > 0) {
+                if (currentDisplayFormat === 'oneCharPortrait') {
+                    // 1文字/ページ (縦向き) のプレビュー
+                    const charToDisplay = text[0];
+                    const fontSize = displayWidth * 0.7; // フォントサイズをキャンバスの幅の約70%に設定
+                    ctx.font = `bold ${fontSize}px 'Inter', sans-serif`;
+                    ctx.fillText(charToDisplay, displayWidth / 2, displayHeight / 2);
+                } else { // twoCharLandscape
+                    // 2文字/ページ (横向き) のプレビュー
+                    const charsToDisplay = text.substring(0, 2);
+                    if (charsToDisplay.length > 0) {
+                        const fontSize = displayWidth * 0.35; // フォントサイズをキャンバスの幅の約35%に設定 (2文字分)
+                        ctx.font = `bold ${fontSize}px 'Inter', sans-serif`;
+
+                        if (charsToDisplay.length === 1) {
+                            ctx.fillText(charsToDisplay[0], displayWidth / 2, displayHeight / 2);
+                        } else {
+                            const char1 = charsToDisplay[0];
+                            const char2 = charsToDisplay[1];
+                            const charWidth = ctx.measureText(char1).width; // 1文字の幅を概算
+
+                            const totalCharsWidth = charWidth * 2;
+                            const spacing = displayWidth * 0.05; // 文字間のスペース
+                            const startX = (displayWidth - totalCharsWidth - spacing) / 2 + charWidth / 2;
+
+                            ctx.fillText(char1, startX, displayHeight / 2);
+                            ctx.fillText(char2, startX + charWidth + spacing, displayHeight / 2);
+                        }
+                    }
+                }
+            }
+
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // スケールをリセット
+        }
+
+        /**
+         * PDFを生成しダウンロードする関数
+         */
+        downloadPdfBtn.addEventListener('click', () => {
+            const text = popText.value;
+            if (!text.trim()) {
+                alert('ポップのテキストを入力してください。');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            let selectedSizeObj;
+            let orientation;
+            let filenamePrefix;
+            let charStep; // 1ページあたりの文字数
+
+            if (currentDisplayFormat === 'oneCharPortrait') {
+                selectedSizeObj = PAPER_SIZES[`${currentPaperSize}_PORTRAIT`];
+                orientation = 'portrait';
+                filenamePrefix = '一文字ポップ';
+                charStep = 1;
+            } else { // twoCharLandscape
+                selectedSizeObj = PAPER_SIZES[`${currentPaperSize}_LANDSCAPE`];
+                orientation = 'landscape';
+                filenamePrefix = '二文字ポップ';
+                charStep = 2;
+            }
+
+            // PDFインスタンスの作成
+            const doc = new jsPDF({
+                orientation: orientation,
+                unit: 'pt',
+                format: [selectedSizeObj.width, selectedSizeObj.height]
+            });
+
+            // 入力されたテキストを文字数に応じて分割してページを生成
+            for (let i = 0; i < text.length; i += charStep) {
+                const chars = text.substring(i, i + charStep);
+
+                // 最初のページ以外は新しいページを追加
+                if (i > 0) {
+                    doc.addPage();
+                }
+
+                // PDF用の高解像度キャンバスを作成
+                const pdfCanvas = document.createElement('canvas');
+                const pdfCtx = pdfCanvas.getContext('2d');
+
+                // PDFのサイズに合わせてキャンバスの内部解像度を設定
+                pdfCanvas.width = selectedSizeObj.width;
+                pdfCanvas.height = selectedSizeObj.height;
+
+                // 背景の描画
+                pdfCtx.fillStyle = bgColor.value;
+                pdfCtx.fillRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+
+                // テキストの描画 (PDF用)
+                pdfCtx.fillStyle = textColor.value;
+                pdfCtx.textAlign = 'center';
+                pdfCtx.textBaseline = 'middle';
+
+                if (currentDisplayFormat === 'oneCharPortrait') {
+                    // 1文字/ページ (縦向き)
+                    const fontSize = selectedSizeObj.width * 0.7;
+                    pdfCtx.font = `bold ${fontSize}pt 'Inter', sans-serif`;
+                    pdfCtx.fillText(chars[0], selectedSizeObj.width / 2, selectedSizeObj.height / 2);
+                } else { // twoCharLandscape
+                    // 2文字/ページ (横向き)
+                    const fontSize = selectedSizeObj.width * 0.35;
+                    pdfCtx.font = `bold ${fontSize}pt 'Inter', sans-serif`;
+
+                    if (chars.length === 1) {
+                        pdfCtx.fillText(chars[0], selectedSizeObj.width / 2, selectedSizeObj.height / 2);
+                    } else {
+                        const char1 = chars[0];
+                        const char2 = chars[1];
+                        const charWidth = pdfCtx.measureText(char1).width;
+
+                        const totalCharsWidth = charWidth * 2;
+                        const spacing = selectedSizeObj.width * 0.05;
+                        const startX = (selectedSizeObj.width - totalCharsWidth - spacing) / 2 + charWidth / 2;
+
+                        pdfCtx.fillText(char1, startX, selectedSizeObj.height / 2);
+                        pdfCtx.fillText(char2, startX + charWidth + spacing, selectedSizeObj.height / 2);
+                    }
+                }
+
+                // PDFにキャンバスの内容を追加
+                const imgData = pdfCanvas.toDataURL('image/png');
+                doc.addImage(imgData, 'PNG', 0, 0, selectedSizeObj.width, selectedSizeObj.height);
+            }
+
+            // PDFをダウンロード
+            const filename = text.length > 0
+                ? `${filenamePrefix}_${text.substring(0, 10)}.pdf`
+                : `${filenamePrefix}.pdf`;
+
+            doc.save(filename);
+        });
+
+        // イベントリスナーの設定
+        popText.addEventListener('input', updatePreview);
+        bgColor.addEventListener('input', updatePreview);
+        textColor.addEventListener('input', updatePreview);
+
+        displayFormatRadios.forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                currentDisplayFormat = event.target.value;
+                updatePreview();
+            });
+        });
+
+        paperSizeRadios.forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                currentPaperSize = event.target.value;
+                updatePreview();
+            });
+        });
+
+        // 初期表示の更新
+        updatePreview();
+    </script>
+</body>
+</html>
